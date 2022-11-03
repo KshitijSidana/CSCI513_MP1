@@ -1,3 +1,0 @@
-c = float
-
-print(c)

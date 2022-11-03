@@ -65,7 +65,7 @@ def extract_trace(tracefile: Path) -> Trace:
 
 def _prepare_spec() -> STLDenseTimeSpecification:
     spec = STLDenseTimeSpecification()
-    spec.set_sampling_period(500, "ms", 0.1)
+    spec.set_sampling_period(100, "ms", 0.1)
     spec.declare_const("dsafe", "float", "4")
     spec.declare_const("T", "float", "20.0")
 

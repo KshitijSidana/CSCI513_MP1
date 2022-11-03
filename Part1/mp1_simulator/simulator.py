@@ -126,9 +126,9 @@ class Simulator:
         )
 
         # Create the ego vehicle blueprint
-        self.ego_bp = self._create_vehicle_blueprint("vehicle.*", color="49,8,8")
+        self.ego_bp = self._create_vehicle_blueprint(self.config["ego_vehicle_filter"], color="49,8,8")
         self.ego: Optional[carla.Vehicle] = None
-        self.ado_bp = self._create_vehicle_blueprint("vehicle.*", color="49,8,8")
+        self.ado_bp = self._create_vehicle_blueprint(self.config["ado_vehicle_filter"], color="49,8,8")
         self.ado: Optional[carla.Vehicle] = None
 
         # Collision sensor

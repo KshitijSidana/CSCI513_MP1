@@ -29,13 +29,5 @@ class Controller:
         dist_to_lead = obs.distance_to_lead
 
         # Do your magic...
-        acc =  dist_to_lead - self.distance_threshold
-        
-        if ego_velocity == self.target_speed:
-            acc = 0
 
-        if acc>0:
-            acc = min(acc, 10)
-        else:
-            acc = max(acc,-10)
-        return acc # Can be -10 to 10 | acceleration value 
+        return 10.0
