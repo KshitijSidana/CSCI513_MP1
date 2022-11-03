@@ -1,0 +1,3 @@
+c = float
+
+print(c)
