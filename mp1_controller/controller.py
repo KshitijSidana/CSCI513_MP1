@@ -29,23 +29,18 @@ class Controller:
         dist_to_lead = obs.distance_to_lead
 
         # Do your magic...
-        if ego_velocity==self.target_speed and dist_to_lead <= self.distance_threshold:
-            return -0.01
-        
-        if ego_velocity < self.target_speed*0.8:
+        if ego_velocity< self.target_speed*0.8:
             if dist_to_lead>self.distance_threshold *5:
-                return 10*((100-dist_to_lead-self.distance_threshold)/100)
-        if ego_velocity< self.target_speed*0.8:
-            if dist_to_lead>self.distance_threshold *2.5:
-                return 1*((100-dist_to_lead-self.distance_threshold)/100)
-        if ego_velocity< self.target_speed*0.8:
-            if dist_to_lead>self.distance_threshold *1:
-                return -1*((100-dist_to_lead-self.distance_threshold)/100)
-        # else:
-        #     if dist_to_lead<self.distance_threshold * 1.1:
-        #         return -10
-        #     else :
-        #         return -10
+                return 10*(dist_to_lead-self.distance_threshold)
+            elif dist_to_lead>self.distance_threshold * 2:
+                return -5
+            else :
+                return -10
+        else:
+            if dist_to_lead<self.distance_threshold * 1.1:
+                return -10
+            else :
+                return -10
 
 
-        return -10.0
+        return 10.0
