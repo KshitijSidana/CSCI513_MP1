@@ -42,6 +42,7 @@ class Controller:
         #   States struct (optimization variables):
         V_ego = model.set_variable(var_type='_x', var_name='V_ego', shape=(1,1))
         S_led = model.set_variable(var_type='_x', var_name='S_led', shape=(1,1))
+        # Ssoft = model.set_variable(var_type='_x', var_name='Ssoft', shape=(1,1))
         # T_R = model.set_variable(var_type='_x', var_name='T_R', shape=(1,1))
         # T_K = model.set_variable(var_type='_x', var_name='T_K', shape=(1,1))
 
@@ -84,8 +85,9 @@ class Controller:
         # T_dif = model.set_expression(expr_name='T_dif', expr=T_R-T_K)
 
         #   With the help of the  𝑘𝑖 -s and  𝑇dif  we can define the ODEs:
-        model.set_rhs('V_ego', A)
-        model.set_rhs('S_led', -1*V_ego)
+        model.set_rhs('V_ego', A*alpha)
+        model.set_rhs('S_led', -1*V_ego*beta)
+        # model.set_rhs('Ssoft', -1*V_ego)
        
         #   Build the model
         model.setup()
@@ -99,7 +101,7 @@ class Controller:
             'n_horizon': 20,
             'n_robust': 1,
             'open_loop': 0,
-            't_step': 0.005,
+            't_step': 0.05, # default was 0.005
             'state_discretization': 'collocation',
             'collocation_type': 'radau',
             'collocation_deg': 2,
@@ -112,9 +114,10 @@ class Controller:
         mpc.set_param(**setup_mpc) # the 88 operator unwraps the dict and assigns the fn param as key=val pairs.
 
         #   Because the magnitude of the states and inputs is very different, we introduce scaling factors:
-        mpc.scaling['_x', 'V_ego'] = 1
+        mpc.scaling['_x', 'V_ego'] = 5
         mpc.scaling['_x', 'S_led'] = 1
-        mpc.scaling['_u', 'A'] = 1
+        # mpc.scaling['_x', 'Ssoft'] = 1
+        mpc.scaling['_u', 'A'] = 10
 
         ### Objective
         #   The goal of the CSTR is to obtain a mixture with a concentration of  𝐶B,ref=0.6  mol/l. 
@@ -130,7 +133,7 @@ class Controller:
         mterm = (_x['V_ego'] - self.target_speed)**2 # terminal cost
         lterm = (_x['S_led'] - self.distance_threshold)**2 # stage cost
 
-        mpc.set_objective(mterm=mterm, lterm=lterm)
+        mpc.set_objective(mterm=mterm, lterm=lterm) #https://www.do-mpc.com/en/develop/api/do_mpc.controller.MPC.set_objective.html
 
         mpc.set_rterm(A=0.1) # input penalty
 
@@ -140,11 +143,11 @@ class Controller:
         #   In this case, there are only upper and lower bounds for each state and the input:
 
         # lower bounds of the states
-        # mpc.bounds['lower', '_x', 'V_ego'] = 0
+        mpc.bounds['lower', '_x', 'V_ego'] = 0
         mpc.bounds['lower', '_x', 'S_led'] = self.distance_threshold 
 
         # upper bounds of the states
-        # mpc.bounds['upper', '_x', 'V_ego'] = 500 # default is infinite 
+        mpc.bounds['upper', '_x', 'V_ego'] = target_velocity 
         # mpc.bounds['upper', '_x', 'S_led'] = 101 # sim doesnot give a val higher than 100
 
         # lower bounds of the inputs
@@ -153,14 +156,14 @@ class Controller:
         # upper bounds of the inputs
         mpc.bounds['upper', '_u', 'A'] = 10
 
-        # SOFT CONSTRSINT NOT NEEDED
+        # SOFT CONSTRSINT
         # If a constraint is not critical, it is possible to implement it as a soft constraint. 
-        # mpc.set_nl_cons('T_R', _x['T_R'], ub=140, soft_constraint=True, penalty_term_cons=1e2)
+        # mpc.set_nl_cons('Ssoft', _x['Ssoft'], soft_constraint=True, penalty_term_cons=1e2)
 
         ### Uncertain values
         #   The explicit values of the two uncertain parameters $\alpha$ and $\beta$, which are considered in the scenario tree, are given by:
-        alpha_var = np.array([1., 1.1, 0.9])
-        beta_var  = np.array([1., 1.05, 0.95])
+        alpha_var = np.array([1., 1, 1])
+        beta_var  = np.array([1., 1.0, 0.99])
 
         mpc.set_uncertainty_values(alpha = alpha_var, beta = beta_var)
         # This means with n_robust=1, that 9 different scenarios are considered. 
@@ -179,7 +182,7 @@ class Controller:
             'integration_tool': 'cvodes',
             'abstol': 1e-10,
             'reltol': 1e-10,
-            't_step': 0.05
+            't_step': 0.05 # default was 0.05
         }
 
         simulator.set_param(**params_simulator)
@@ -221,13 +224,15 @@ class Controller:
 
         # Set the initial state of mpc, simulator and estimator:
         V_ego_0 = ego_velocity
-        S_led_0 = dist_to_lead
+        S_led_0 = dist_to_lead - self.distance_threshold
+        # Ssoft_0 = dist_to_lead - self.distance_threshold
         
         # C_a_0 = 0.8 # This is the initial concentration inside the tank [mol/l]
         # C_b_0 = 0.5 # This is the controlled variable [mol/l]
         # T_R_0 = 134.14 #[C]
         # T_K_0 = 130.0 #[C]
         # x0 = np.array([C_a_0, C_b_0, T_R_0, T_K_0]).reshape(-1,1)
+        # x0 = np.array([V_ego_0, S_led_0, Ssoft_0]).reshape(-1,1)
         x0 = np.array([V_ego_0, S_led_0]).reshape(-1,1)
 
         mpc.x0 = x0
@@ -235,80 +240,90 @@ class Controller:
         estimator.x0 = x0
 
         mpc.set_initial_guess()
-        u0 = None
-        # Now, we simulate the closed-loop for 10 steps (and suppress the output of the cell with the magic command %%capture):
-        print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-        
-        for k in range(10):
+        # u0 = mpc.make_step(x0)
+        u0, y_next = None, None
+        # Now, we simulate the closed-loop for 2 steps (and suppress the output of the cell with the magic command %%capture):
+        # print("&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+        import io
+        import sys
+        for k in range(6):
+            save_stdout = sys.stdout
+            sys.stdout = io.StringIO() 
+            
             u0 = mpc.make_step(x0)
             y_next = simulator.make_step(u0)
             x0 = estimator.make_step(y_next)
-            print(f"k, {k}, u0, {u0}, y_next[0], {y_next[0]}, y_next[1], {y_next[1]}, x0[0], {x0[0]}, x0[1], {x0[1]}")
+            
+            sys.stdout = save_stdout
+            
+        #     print(f"k, {k}, u0, {u0}, y_next[0], {y_next[0]}, y_next[1], {y_next[1]}, x0[0], {x0[0]}, x0[1], {x0[1]}")
 
         ret = u0[0][0]
-        print(f"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
-        print(f"&&&&&&&&&&&&&&&& {u0[0][0]} &&&&&&&&&&&&&&")
-        print(f"&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&&")
+        # print(f"______________________________________________")
+        print(f"ACC, {round(u0[0][0],5)}\t\tSpeed, {round(ego_velocity,5)},\tSetSpeed, {self.target_speed},\tDistance, {round(dist_to_lead,5)},\tDistThresh, {self.distance_threshold}")
+        # print(f"\t\tACC = {u0[0][0]} \t\tSpeed , {y_next[0]},\tDistance, {y_next[1]}")
+        print(f"______________________________________________")
 
-        # # ## Animating the results
+        import time
+        # ## Animating the results
+        if time.time()%1000 == 0:
+            # # To animate the results, we first configure the **do-mpc** graphics object, which is initiated with the respective data object:
+            mpc_graphics = do_mpc.graphics.Graphics(mpc.data)
 
-        # # # To animate the results, we first configure the **do-mpc** graphics object, which is initiated with the respective data object:
-        # mpc_graphics = do_mpc.graphics.Graphics(mpc.data)
-
-        # from matplotlib import rcParams
-        # rcParams['axes.grid'] = True
-        # rcParams['font.size'] = 18
-        
-        # fig, ax = plt.subplots(5, sharex=True, figsize=(16,12))
-        # # Configure plot:
-        # mpc_graphics.add_line(var_type='_x', var_name='V_ego', axis=ax[0])
-        # mpc_graphics.add_line(var_type='_x', var_name='S_led', axis=ax[1])
-        # mpc_graphics.add_line(var_type='_u', var_name='A', axis=ax[2])
-        # ax[0].set_ylabel('time [h]')
-        # ax[1].set_ylabel('time [h]')
-        # ax[2].set_xlabel('time [h]')
-
-
-
-        # # Update properties for all prediction lines:
-        # for line_i in mpc_graphics.pred_lines.full:
-        #     line_i.set_linewidth(2)
-        # # Highlight nominal case:
-        # for line_i in np.sum(mpc_graphics.pred_lines['_x', :, :,0]):
-        #     line_i.set_linewidth(5)
-        # for line_i in np.sum(mpc_graphics.pred_lines['_u', :, :,0]):
-        #     line_i.set_linewidth(5)
-        # # for line_i in np.sum(mpc_graphics.pred_lines['_aux', :, :,0]):
-        # #     line_i.set_linewidth(5)
-
-        # # Add labels
-        # label_lines0 = mpc_graphics.result_lines['_x', 'V_ego']
-        # label_lines1 = mpc_graphics.result_lines['_x', 'S_led']
-        # label_lines2 = mpc_graphics.result_lines['_x', 'A']
-        # ax[0].legend(label_lines0, ['V_ego'])
-        # ax[1].legend(label_lines1, ['S_led'])
-        # ax[2].legend(label_lines2, ['A'])
-
-        # fig.align_ylabels()
+            from matplotlib import rcParams
+            rcParams['axes.grid'] = True
+            rcParams['font.size'] = 18
+            
+            fig, ax = plt.subplots(5, sharex=True, figsize=(16,12))
+            # Configure plot:
+            mpc_graphics.add_line(var_type='_x', var_name='V_ego', axis=ax[0])
+            mpc_graphics.add_line(var_type='_x', var_name='S_led', axis=ax[1])
+            mpc_graphics.add_line(var_type='_u', var_name='A', axis=ax[2])
+            ax[0].set_ylabel('time [h]')
+            ax[1].set_ylabel('time [h]')
+            ax[2].set_xlabel('time [h]')
 
 
-        # from matplotlib.animation import FuncAnimation, ImageMagickWriter
-        
-        # def update(t_ind):
-        #     print('Writing frame: {}.'.format(t_ind), end='\r')
-        #     mpc_graphics.plot_results(t_ind=t_ind)
-        #     mpc_graphics.plot_predictions(t_ind=t_ind)
-        #     mpc_graphics.reset_axes()
-        #     lines = mpc_graphics.result_lines.full
-        #     return lines
 
-        # n_steps = mpc.data['_time'].shape[0]
+            # Update properties for all prediction lines:
+            for line_i in mpc_graphics.pred_lines.full:
+                line_i.set_linewidth(2)
+            # Highlight nominal case:
+            for line_i in np.sum(mpc_graphics.pred_lines['_x', :, :,0]):
+                line_i.set_linewidth(5)
+            for line_i in np.sum(mpc_graphics.pred_lines['_u', :, :,0]):
+                line_i.set_linewidth(5)
+            # for line_i in np.sum(mpc_graphics.pred_lines['_aux', :, :,0]):
+            #     line_i.set_linewidth(5)
+
+            # Add labels
+            label_lines0 = mpc_graphics.result_lines['_x', 'V_ego']
+            label_lines1 = mpc_graphics.result_lines['_x', 'S_led']
+            label_lines2 = mpc_graphics.result_lines['_x', 'A']
+            ax[0].legend(label_lines0, ['V_ego'])
+            ax[1].legend(label_lines1, ['S_led'])
+            ax[2].legend(label_lines2, ['A'])
+
+            fig.align_ylabels()
 
 
-        # anim = FuncAnimation(fig, update, frames=n_steps, blit=True)
+            from matplotlib.animation import FuncAnimation, ImageMagickWriter
+            
+            def update(t_ind):
+                print('Writing frame: {}.'.format(t_ind), end='\r')
+                mpc_graphics.plot_results(t_ind=t_ind)
+                mpc_graphics.plot_predictions(t_ind=t_ind)
+                mpc_graphics.reset_axes()
+                lines = mpc_graphics.result_lines.full
+                return lines
 
-        # gif_writer = ImageMagickWriter(fps=5)
-        # anim.save('anim_CSTR.gif', writer=gif_writer)
+            n_steps = mpc.data['_time'].shape[0]
+
+
+            anim = FuncAnimation(fig, update, frames=n_steps, blit=True)
+
+            gif_writer = ImageMagickWriter(fps=10)
+            anim.save(f'anim_CSTR{time.ctime(time.time())}.gif', writer=gif_writer)
 
 
         return ret
