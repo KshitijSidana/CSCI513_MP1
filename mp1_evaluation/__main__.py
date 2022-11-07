@@ -148,14 +148,24 @@ def evaluate_tracefile(tracefile: Path):
     trace = extract_trace(tracefile)
 
     safeFollowing = checkSafeFollowing(trace)
-    print("Robustness for `safeFollowing`           = {}".format(safeFollowing[0.0]))
+    print(
+        "Robustness for `safeFollowing`           = {}".format(
+            # round(safeFollowing[0.0],8)
+            safeFollowing[0.0]
+        )
+    )
 
     forwardProgress = checkForwardProgress(trace)
-    print("Robustness for `forwardProgress`         = {}".format(forwardProgress[0.0]))
+    print("Robustness for `forwardProgress`         = {}".format(
+            # round(forwardProgress[0.0],8)
+            forwardProgress[0.0]
+        )
+    )
 
     dontStopUnlessLeadStops = checkDontStopUnlessLeadStops(trace)
     print(
         "Robustness for `dontStopUnlessLeadStops` = {}".format(
+            # round(dontStopUnlessLeadStops[0.0],8)
             dontStopUnlessLeadStops[0.0]
         )
     )
@@ -163,6 +173,7 @@ def evaluate_tracefile(tracefile: Path):
     reachTargetUnlessUnsafe = checkReachTargetUnlessUnsafe(trace)
     print(
         "Robustness for `reachTargetUnlessUnsafe` = {}".format(
+            # round(reachTargetUnlessUnsafe[0.0],8)
             reachTargetUnlessUnsafe[0.0]
         )
     )
