@@ -43,11 +43,28 @@ class Controller:
         dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
         velocity_to_gain = target_velocity - ego_velocity           # velocity to gain untill we reach target velocity 
         dist_buffer = step_count * time_step * ego_velocity                        # buffer to account for distance travelled while stopping
-
+        
 
         def verbose(condition):
             print(f"condition, {condition}, ret, {ret}, ego_velocity, {ego_velocity}, /, {target_velocity}, dist_to_lead, {dist_to_lead}, , dist_to_cover, {dist_to_cover}, dist_buffer, {dist_buffer}, velocity_to_gain, {velocity_to_gain}")
-        
+            with open("/home/kshitij/Desktop/OP/op.txt", "a") as f:
+                f.write("condition, ")
+                f.write(str(condition))
+                f.write(", ret, ")
+                f.write(str(ret))
+                f.write(", ego_velocity, ")
+                f.write(str(ego_velocity))
+                f.write(", target_velocity, ")
+                f.write(str(target_velocity))
+                f.write(", dist_to_lead, ")
+                f.write(str(dist_to_lead))
+                f.write(", dist_to_cover, ")
+                f.write(str(dist_to_cover))
+                f.write(", dist_buffer, ")
+                f.write(str(dist_buffer))
+                f.write(", velocity_to_gain, ")
+                f.write(str(velocity_to_gain))
+                f.write("\n")
         
         # Emergency stop - too close to target 
         if dist_to_cover-dist_buffer <=0:
@@ -63,23 +80,29 @@ class Controller:
             # distance condition violated
             if dist_to_cover-dist_buffer <=0:
                 ret =-10
-                verbose("dis_v")
+                verbose("dis_vio")
                 return ret
             else:
                 verbose("slow")
                 return ret
-        
+       
+        flag = ""
         # try to attain target velocity
         if velocity_to_gain > 0:
             ret = P_v * velocity_to_gain
-
+            flag = "go_to_tgt"
             # distance condition
             if dist_to_cover-dist_buffer <=0:
+                flag = "dist constraint"
                 ret = P_d * dist_to_cover
             else:
                 ret = min(ret, P_d * dist_to_cover)
-
-            verbose()
+                if ret == P_d * dist_to_cover:
+                    flag = "min is dist constraint"
+                else:
+                    flag = "min is go to tgt"
+                    
+            verbose(flag)
             return ret
 
 
@@ -103,6 +126,5 @@ class Controller:
         #     ret = 0
         #     verbose()
         #     return ret
-            
-        verbose()
+        verbose("default_case")
         return ret
