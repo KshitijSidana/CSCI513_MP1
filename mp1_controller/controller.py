@@ -10,11 +10,40 @@ from casadi import *
 import do_mpc
 import matplotlib.pyplot as plt
 
+import time
+
 # NOTE: Very important that the class name remains the same
 class Controller:
     def __init__(self, target_speed: float, distance_threshold: float):
         self.target_speed = target_speed
         self.distance_threshold = distance_threshold
+        
+        self.previousTime = time.time()
+        self.cumError = 0
+        self.lastError = 0
+        with open("/home/kshitij/Desktop/OP/op_pid.txt", "w") as f:
+            f.write("currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
+
+
+    def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float)->float:
+        currentTime = time.time();                          # get current time
+        elapsedTime = (currentTime - self.previousTime);    # compute time elapsed from previous computation
+        
+        error = input - setpoint;                           # error
+        self.cumError += error * elapsedTime;               # compute integral
+        rateError = (error - self.lastError)/elapsedTime;   # compute derivative
+ 
+        out = kp*error + ki*self.cumError + kd*rateError;   # PID output               
+ 
+        self.lastError = error;                             # store current error
+        self.previousTime = currentTime;                    # store current time
+
+
+        with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
+            f.write(f"{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
+        # print(f"{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
+
+        return out
 
     def run_step(self, obs: Observation) -> float:
         """This is the main run step of the controller.
@@ -31,9 +60,28 @@ class Controller:
         ego_velocity = obs.velocity
         target_velocity = obs.target_velocity
         dist_to_lead = obs.distance_to_lead
+        
+        # Magic...
+        
+        step_count = 10     # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
+        time_step = 0.1     # time between two control signals                      | used to predict distance travelled at current speed
+        dist_buffer = step_count * time_step * ego_velocity**1.5      # buffer to account for distance travelled while stopping
+        dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
+        
+        Kc = 0.25*4
+        Pc = 0.00325*0.5
 
-        # Do your magic...
-                
+        setpoint = self.distance_threshold + dist_buffer
+        input = dist_to_cover
+
+        ret = self.pid (dist_to_cover, setpoint, 0.5*Kc, 0.5*Pc, Pc/8)
+
+        print(f"ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
+
+        return ret       
+
+        
+        
         ret = 0         # return value
         step_count = 15 # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
         time_step = 0.1 # time between two control signals                      | used to predict distance travelled at current speed
