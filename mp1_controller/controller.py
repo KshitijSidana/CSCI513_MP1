@@ -25,13 +25,13 @@ class Controller:
             f.write("currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
 
 
-    def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float)->float:
+    def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float, t_pow: float)->float:
         currentTime = time.time();                          # get current time
         elapsedTime = (currentTime - self.previousTime);    # compute time elapsed from previous computation
         
-        error = input - setpoint;                           # error
-        self.cumError += error * elapsedTime;               # compute integral
-        rateError = (error - self.lastError)/elapsedTime;   # compute derivative
+        error = input - setpoint;                                       # error
+        self.cumError += error * (elapsedTime**t_pow) ;                 # compute integral
+        rateError = (error - self.lastError)/(elapsedTime**t_pow);      # compute derivative
  
         out = kp*error + ki*self.cumError + kd*rateError;   # PID output               
  
@@ -63,21 +63,30 @@ class Controller:
         
         # Magic...
         
-        step_count = 10     # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
+        step_count = 15     # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
         time_step = 0.1     # time between two control signals                      | used to predict distance travelled at current speed
-        dist_buffer = step_count * time_step * ego_velocity**1.5      # buffer to account for distance travelled while stopping
+        dist_buffer = step_count * time_step * ego_velocity**1.25      # buffer to account for distance travelled while stopping
         dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
-        
-        Kc = 0.25*4
-        Pc = 0.00325*0.5
 
-        setpoint = self.distance_threshold + dist_buffer
-        input = dist_to_cover
 
-        ret = self.pid (dist_to_cover, setpoint, 0.5*Kc, 0.5*Pc, Pc/8)
+        if dist_to_lead > 2*target_velocity:
+            Kc = 0.25*6
+            Pc = 0.00325*8
+            setpoint = ego_velocity
+            input = target_velocity
+            ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow=1)
+            print(f"vel ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
+        else:
+            Kc = 0.25*6
+            Pc = 0.00325
+            setpoint = self.distance_threshold + dist_buffer
+            input = dist_to_cover
+            ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow= 2)
+            print(f"dst ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
 
-        print(f"ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
 
+
+        #TODO Check if tgt vel reached or not
         return ret       
 
         
