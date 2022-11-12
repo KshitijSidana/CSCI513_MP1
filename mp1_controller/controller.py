@@ -19,31 +19,103 @@ class Controller:
         self.distance_threshold = distance_threshold
         
         self.previousTime = time.time()
-        self.cumError = 0
-        self.lastError = 0
+        self.v_error = [0.00]
+        self.d_error = [0.00]
+        self.d_del_i = [0.00]
+        self.v_del_i = [0.00]
         with open("/home/kshitij/Desktop/OP/op_pid.txt", "w") as f:
-            f.write("currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
+            f.write("t_pow, currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
 
 
-    def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float, t_pow: float)->float:
+    def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float, t_pow: float, episodes = 20)->float:
         currentTime = time.time();                          # get current time
-        elapsedTime = (currentTime - self.previousTime);    # compute time elapsed from previous computation
         
-        error = input - setpoint;                                       # error
-        self.cumError += error * (elapsedTime**t_pow) ;                 # compute integral
-        rateError = (error - self.lastError)/(elapsedTime**t_pow);      # compute derivative
+        elapsedTime = currentTime - self.previousTime;    # compute time elapsed from previous computation
+        
+        error = setpoint - input                             # error
+
+        cumError = float()
+        lastError = float()
+    
+
+        if t_pow == 1:
+            lastError = self.v_error[-1]
+
+            self.v_error.append(error)                               # store current error
+            self.v_del_i.append(error * (elapsedTime**t_pow)) ;      # store current integral
+            if len(self.v_error)>episodes:
+                self.v_error = self.v_error[-episodes:]
+                try:
+                    self.v_del_i = self.v_del_i[-episodes:]
+                except:
+                    print("Failed | try:                     self.v_del_i = self.v_del_i[-episodes:]")
+            
+            cumError = sum(self.v_del_i)
+        
+        elif t_pow ==2 :
+            lastError = self.d_error[-1]
+
+            self.d_error.append(error)                               # store current error
+            self.v_del_i.append(error * (elapsedTime**t_pow)) ;      # store current integral
+            if len(self.d_error)>episodes:
+                self.d_error = self.d_error[-episodes:]
+                try:
+                    self.d_del_i = self.d_del_i[-episodes:]
+                except:
+                    print("Failed | try:                     self.d_del_i = self.d_del_i[-episodes:]")
+            
+            cumError = sum(self.v_del_i)
+
+        rateError = (error - lastError)/(elapsedTime**t_pow);       # compute derivative
  
-        out = kp*error + ki*self.cumError + kd*rateError;   # PID output               
+        out = kp*error + ki*cumError + kd*rateError;                # PID output               
  
-        self.lastError = error;                             # store current error
-        self.previousTime = currentTime;                    # store current time
+        self.previousTime = currentTime;                            # store current time
 
 
         with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
-            f.write(f"{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
-        # print(f"{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
+            f.write(f"{t_pow},{currentTime},{elapsedTime},{setpoint},{input},{error},{cumError},{rateError},{out},{kp},{ki},{kd}\n")
+        # print(f"{t_pow},{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
 
         return out
+
+    # def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float, t_pow: float, episodes = 20)->float:
+    #     currentTime = time.time();                          # get current time
+    #     elapsedTime = (currentTime - self.previousTime);    # compute time elapsed from previous computation
+        
+    #     error = input - setpoint # error
+
+    #     cumError = float()
+    #     lastError = float()
+        
+        
+    #     if t_pow == 1:
+    #         cumError = sum(self.vError)
+    #         lastError = self.vError[-1]
+    #         self.vError.append(error)                               # store current error
+    #         if len(self.vError)>episodes:
+    #             self.vError = self.vError[-episodes:]
+        
+    #     elif t_pow ==2 :
+    #         cumError = sum(self.dError)
+    #         lastError = self.dError[-1] 
+    #         self.dError.append(error)                               # store current error
+    #         if len(self.dError)>episodes:
+    #             self.dError = self.dError[-episodes:]
+
+    #     cumError += error * (elapsedTime**t_pow) ;                  # compute integral
+    #     rateError = (error - lastError)/(elapsedTime**t_pow);       # compute derivative
+ 
+    #     out = kp*error + ki*cumError + kd*rateError;                # PID output               
+ 
+    #     self.previousTime = currentTime;                            # store current time
+
+
+    #     with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
+    #         f.write(f"{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
+    #     # print(f"{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
+
+    #     return out
 
     def run_step(self, obs: Observation) -> float:
         """This is the main run step of the controller.
@@ -69,24 +141,28 @@ class Controller:
         dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
 
 
-        if dist_to_lead > 2*target_velocity:
-            Kc = 0.25*6
-            Pc = 0.00325*8
-            setpoint = ego_velocity
-            input = target_velocity
+        Kc = 0.25*6
+        Pc = 0.00325
+        setpoint = dist_to_cover
+        input =  self.distance_threshold + dist_buffer
+        ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow= 2)
+
+        if dist_to_lead > 2*target_velocity and ret > -15: # hence safe to chase target velocity
+            Kc = 0.25*10
+            Pc = 0.00325*10
+            setpoint = target_velocity
+            input = ego_velocity
             ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow=1)
             print(f"vel ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
         else:
-            Kc = 0.25*6
-            Pc = 0.00325
-            setpoint = self.distance_threshold + dist_buffer
-            input = dist_to_cover
-            ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow= 2)
             print(f"dst ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
 
 
+        # Going too fast 
+        if ego_velocity >= target_velocity:
+            ret = 2*(target_velocity - ego_velocity)
 
-        #TODO Check if tgt vel reached or not
+
         return ret       
 
         
