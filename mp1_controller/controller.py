@@ -35,14 +35,14 @@ class Controller:
         # Do your magic...
                 
         ret = 0         # return value
-        step_count = 25 # time between two control signals | used to predice distance travelled at current speed in ove time step
-        time_step = 0.1 # time between two control signals | used to predice distance travelled at current speed in ove time step
-        P_v = 1         # Proportal control for velocity 
-        P_d = 2         # Proportal control for velocity 
+        step_count = 15 # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
+        time_step = 0.1 # time between two control signals                      | used to predict distance travelled at current speed
+        P_v = 1         # Proportional gain for velocity 
+        P_d = 2         # Proportional gain for velocity 
 
         dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
         velocity_to_gain = target_velocity - ego_velocity           # velocity to gain untill we reach target velocity 
-        dist_buffer = step_count * time_step * ego_velocity         # buffer to account for distance travelled while stopping
+        dist_buffer = step_count * time_step * ego_velocity**2         # buffer to account for distance travelled while stopping
         
 
         def verbose(condition):
@@ -88,12 +88,15 @@ class Controller:
 
 
         flag = ""
-        if dist_to_cover > dist_buffer + self.distance_threshold:
+        if dist_to_cover > min(target_velocity*2 ,dist_buffer + self.distance_threshold):
             #  we have a lot of distance to cover    
             # try to attain target velocity
-            if velocity_to_gain > 0:
+            if velocity_to_gain > 0.1*target_velocity:
                 ret = P_v * velocity_to_gain + P_d * dist_to_cover
-                flag = "P_v P_d"
+                flag = "P_v  +  P_d"
+            elif velocity_to_gain > 0:
+                ret = P_v * velocity_to_gain
+                flag = "P_v  no P_d"
             else:
                 flag = "at_tgt_vel"
                 ret = 0
