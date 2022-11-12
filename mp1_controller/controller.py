@@ -139,30 +139,33 @@ class Controller:
         time_step = 0.1     # time between two control signals                      | used to predict distance travelled at current speed
         dist_buffer = step_count * time_step * ego_velocity**1.25      # buffer to account for distance travelled while stopping
         dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
-
+        flag = ""
 
         Kc = 0.25*6
         Pc = 0.00325
         setpoint = dist_to_cover
         input =  self.distance_threshold + dist_buffer
         ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow= 2)
+        flag = "ddflt"
 
         if dist_to_lead > 2*target_velocity and ret > -15: # hence safe to chase target velocity
-            Kc = 0.25*10
+            Kc = 0.25*20
             Pc = 0.00325*10
             setpoint = target_velocity
             input = ego_velocity
             ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow=1)
-            print(f"vel ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
-        else:
-            print(f"dst ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
-
+            flag = "d>2tv"
+            if dist_to_lead>4*target_velocity:
+                flag = "d>3tv"
+                ret = 10
 
         # Going too fast 
         if ego_velocity >= target_velocity:
+            flag = "v>tv"
             ret = 2*(target_velocity - ego_velocity)
 
 
+        print(f"{flag} ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
         return ret       
 
         
