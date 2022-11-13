@@ -5,11 +5,6 @@ Here, you will design the controller for your for the adaptive cruise control sy
 
 from mp1_simulator.simulator import Observation
 
-import numpy as np
-from casadi import *
-import do_mpc
-import matplotlib.pyplot as plt
-
 import time
 
 # NOTE: Very important that the class name remains the same
@@ -23,7 +18,7 @@ class Controller:
         self.d_error = [0.00]
         self.d_del_i = [0.00]
         self.v_del_i = [0.00]
-        with open("/home/kshitij/Desktop/OP/op_pid.txt", "w") as f:
+        with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
             f.write("t_pow, currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
 
 
@@ -46,7 +41,8 @@ class Controller:
                 try:
                     self.v_del_i = self.v_del_i[-episodes:]
                 except:
-                    print("Failed | try:                     self.v_del_i = self.v_del_i[-episodes:]")
+                    # print("Failed | try:                     self.v_del_i = self.v_del_i[-episodes:]")
+                    pass
             
             cumError = sum(self.v_del_i)
         
@@ -61,8 +57,9 @@ class Controller:
                 try:
                     self.d_del_i = self.d_del_i[-episodes:]
                 except:
-                    print("Failed | try:                     self.d_del_i = self.d_del_i[-episodes:]")
-            
+                    # print("Failed | try:                     self.d_del_i = self.d_del_i[-episodes:]")
+                    pass
+
             cumError = sum(self.v_del_i)
 
         rateError = (error - lastError)/(elapsedTime**t_pow);       # compute derivative
@@ -108,7 +105,7 @@ class Controller:
 
         if dist_to_lead > 2*target_velocity and ret > -15: # hence safe to chase target velocity
             Kc = 0.25*30
-            Pc = 0.00325*10
+            Pc = 0.0325*10
             setpoint = target_velocity
             input = ego_velocity
             flag = "d>2tv"
@@ -122,6 +119,10 @@ class Controller:
             flag = "v>tv"
             ret = 2*(target_velocity - ego_velocity)
 
+        # Goetting too close 
+        if dist_to_cover < 0.02* self.distance_threshold:
+            flag = "e_brk"
+            ret = -10
 
-        print(f"{flag} ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {dist_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
+        print(f"{flag} ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {obs.distance_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
         return ret
