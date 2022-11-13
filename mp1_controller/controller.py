@@ -2,9 +2,16 @@
 
 Here, you will design the controller for your for the adaptive cruise control system.
 """
-
+'''
+NOTE to grader
+Map - Town06
+Requirements for this file to run:
+- numpy
+- time
+'''
 from mp1_simulator.simulator import Observation
 
+import numpy as np
 import time
 
 # NOTE: Very important that the class name remains the same
@@ -13,15 +20,16 @@ class Controller:
         self.target_speed = target_speed
         self.distance_threshold = distance_threshold
         
+        # Set-up for Magic...
         self.previousTime = time.time()
         self.v_error = [0.00]
         self.d_error = [0.00]
         self.d_del_i = [0.00]
         self.v_del_i = [0.00]
-        with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
-            f.write("t_pow, currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
+        # with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
+        #     f.write("t_pow, currentTime, elapsedTime, setpoint, input, error, self.cumError, rateError, out, kp, ki, kd\n")
 
-
+    # Secret Spells for Magic...
     def pid (self, input: float, setpoint: float, kp: float, ki: float, kd: float, t_pow: float, episodes = 20)->float:
         currentTime = time.time();                        # get current time
         elapsedTime = currentTime - self.previousTime;    # compute time elapsed from previous computation
@@ -66,8 +74,8 @@ class Controller:
         out = kp*error + ki*cumError + kd*rateError;                # PID output               
         self.previousTime = currentTime;                            # store current time
 
-        with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
-            f.write(f"{t_pow},{currentTime},{elapsedTime},{setpoint},{input},{error},{cumError},{rateError},{out},{kp},{ki},{kd}\n")
+        # with open("/home/kshitij/Desktop/OP/op_pid.txt", "a") as f:
+        #     f.write(f"{t_pow},{currentTime},{elapsedTime},{setpoint},{input},{error},{cumError},{rateError},{out},{kp},{ki},{kd}\n")
         # print(f"{t_pow},{currentTime},{elapsedTime},{setpoint},{input},{error},{self.cumError},{rateError},{out},{kp},{ki},{kd}\n")
 
         return out
@@ -88,41 +96,47 @@ class Controller:
         target_velocity = obs.target_velocity
         dist_to_lead = obs.distance_to_lead
         
-        # Magic...
+        #### Magic...
         
-        step_count = 12     # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
+        step_count = 15     # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
         time_step = 0.1     # time between two control signals                      | used to predict distance travelled at current speed
-        dist_buffer = min( 1.5*target_velocity, step_count * time_step * ego_velocity**1.25)      # buffer to account for distance travelled while stopping
+        dist_buffer = step_count * time_step * ego_velocity**1.25   # buffer to account for distance travelled while stopping
         dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
         flag = ""
 
-        Kc = 0.25*7
-        Pc = 0.00325
+        Kc = 0.25*9
+        Pc = 0.005*12
         setpoint = dist_to_cover
         input =  dist_buffer
         flag = "ddflt"
-        ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow= 2)
+        ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/80, t_pow= 2)
 
-        if dist_to_lead > 2*target_velocity and ret > -15: # hence safe to chase target velocity
-            Kc = 0.25*30
-            Pc = 0.0325*10
+        if dist_to_cover > max(2*target_velocity, dist_buffer) and ret > 0: 
+            # Super safe to reach target velocity ASAP!
+            flag = "d>2tv"
+            # ret = 8*(target_velocity - ego_velocity)
+            Kc = 0.25*68
+            Pc = 0.005*17
             setpoint = target_velocity
             input = ego_velocity
-            flag = "d>2tv"
-            ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/8, t_pow=1)
-            if dist_to_lead>3*target_velocity:
-                flag = "d>3tv"
-                ret = 10
+            ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/1000, t_pow=1, episodes = 12)
+            
+        ##### Edge cases 
+        # Unlikely to happen given the nature of the aforementioned conditions
 
         # Going too fast 
         if ego_velocity >= target_velocity:
-            flag = "v>tv"
-            ret = 2*(target_velocity - ego_velocity)
+            flag = "v>=tv"
+            ret = 4*(target_velocity - ego_velocity)
 
-        # Goetting too close 
+        # Goetting too close
         if dist_to_cover < 0.02* self.distance_threshold:
             flag = "e_brk"
             ret = -10
 
         print(f"{flag} ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {obs.distance_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
+        
+        #### Finally
+        # Before we return the value, we clip it between [-10, 10]
+        ret = np.clip(ret, -10.0, 10.0)
         return ret

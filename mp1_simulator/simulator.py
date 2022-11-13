@@ -34,7 +34,7 @@ CONFIG = {
     "display_size": 400,  # screen size of bird-eye render
     "max_past_step": 1,  # the number of past steps to draw
     "dt": 0.1,  # time interval between two frames
-    "max_timesteps": 200,  # maximum timesteps per episode
+    "max_timesteps": 500,  # maximum timesteps per episode
     "ego_vehicle_filter": "vehicle.lincoln.*",  # filter for defining ego vehicle
     "ado_vehicle_filter": "vehicle.toyota.prius",
     "port": 2000,  # connection port
@@ -73,13 +73,10 @@ def create_ado_sawtooth(
     rise_width: float = 0.5,  # [0, 1]
 ) -> np.ndarray:
     t = np.linspace(0, max_timesteps * dt, max_timesteps)
-    
-    time_period = random.uniform(0.001,10.0)
     # Frequency
     freq = 1 / time_period
     # Width of the rise window
     width = rise_width
-    width = random.uniform(0.0,1.0)
     # We want to offset so that we start at 0
     offset = (time_period / 2) * width
     f = signal.sawtooth(freq * 2 * np.pi * (t + offset), width)
@@ -145,7 +142,7 @@ class Simulator:
         # Camera sensor
         self.obs_size = 600
         self.camera_img = np.zeros((self.obs_size, self.obs_size, 3), dtype=np.uint8)
-        self.camera_trans = carla.Transform(carla.Location(x=-1.8, y=2.0, z=1.7), carla.Rotation(pitch=0.000000, yaw=-35.857498, roll=0.000000),)
+        self.camera_trans = carla.Transform(carla.Location(x=0.8, z=1.7))
         self.camera_bp = self.world.get_blueprint_library().find("sensor.camera.rgb")
         # Modify the attributes of the blueprint to set image resolution and field of view.
         self.camera_bp.set_attribute("image_size_x", str(self.obs_size))
