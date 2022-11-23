@@ -85,7 +85,7 @@ def run_episode(
     trace.append(observation_to_trace_row(obs, sim))
     while True:
         estimate_dist = predictor.predict(img)
-        action = controller.run_step(obs, estimate_dist=estimate_dist)
+        action = controller.run_step(obs, estimate_dist=30)
         obs, img = sim.step(action)
 
         ## for visualizing the image ##

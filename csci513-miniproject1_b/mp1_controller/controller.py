@@ -80,7 +80,7 @@ class Controller:
 
         return out
 
-    def run_step(self, obs: Observation) -> float:
+    def run_step(self, obs: Observation, estimate_dist) -> float:        
         """This is the main run step of the controller.
 
         Here, you will have to read in the observatios `obs`, process it, and output an
