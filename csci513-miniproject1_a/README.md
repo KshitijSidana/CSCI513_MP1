@@ -56,7 +56,7 @@ vehicle.
 ## Setup
 
 There are two ways to setup the project. The first method uses direct system installation, and the second method uses Docker. 
-These instructions assume you have some Linux device. If you are using Windows, check out [Windows Subsystem for
+These instructions assume you have some Linux device. If you are usinpyg Windows, check out [Windows Subsystem for
 Linux](https://docs.microsoft.com/en-us/windows/ai/directml/gpu-cuda-in-wsl).
 
 In all instances you need to have the following prerequisite packages installed:

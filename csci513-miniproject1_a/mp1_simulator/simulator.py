@@ -29,12 +29,12 @@ from mp1_simulator.render import BirdeyeRender
 
 
 
-
+200
 CONFIG = {
     "display_size": 400,  # screen size of bird-eye render
     "max_past_step": 1,  # the number of past steps to draw
     "dt": 0.1,  # time interval between two frames
-    "max_timesteps": 500,  # maximum timesteps per episode
+    "max_timesteps": 200,  # maximum timesteps per episode
     "ego_vehicle_filter": "vehicle.lincoln.*",  # filter for defining ego vehicle
     "ado_vehicle_filter": "vehicle.toyota.prius",
     "port": 2000,  # connection port

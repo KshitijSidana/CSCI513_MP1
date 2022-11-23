@@ -3,11 +3,11 @@
 Here, you will design the controller for your for the adaptive cruise control system.
 """
 '''
-NOTE to grader
-Map - Town06
-Requirements for this file to run:
-- numpy
-- time
+    NOTE
+        Map - Town06
+        Requires:
+            - numpy
+            - time
 '''
 from mp1_simulator.simulator import Observation
 
@@ -98,45 +98,49 @@ class Controller:
         
         #### Magic...
         
-        step_count = 15     # number of time steps to calculate braking distance    | used to predict distance travelled at current speed
-        time_step = 0.1     # time between two control signals                      | used to predict distance travelled at current speed
-        dist_buffer = step_count * time_step * ego_velocity**1.25   # buffer to account for distance travelled while stopping
-        dist_to_cover = dist_to_lead - self.distance_threshold      # distnace to cover untill we reach distance threshold 
+        step_count = 15     # number of time steps to calculate braking distance    # used to predict distance travelled at current speed
+        time_step = 0.1     # time between two control signals                      # used to predict distance travelled at current speed
+        dist_buffer = step_count * time_step * ego_velocity**1.25                   # buffer to account for distance travelled while stopping
+        dist_to_cover = dist_to_lead - (self.distance_threshold + 0.75)             # distnace to cover untill we reach (distance threshold + 0.75)
+        #                                                                           # Offset of 0.75 as collision is detected when dist_to_lead ~= 4.636
+
         flag = ""
 
-        Kc = 0.25*9
-        Pc = 0.005*12
+        ### Base case - control based on distance
+        Kc = 0.25*8
+        Pc = 0.005*20
         setpoint = dist_to_cover
         input =  dist_buffer
         flag = "ddflt"
-        ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/80, t_pow= 2)
+        ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/10, t_pow= 2)
 
+        ### Best case - control based on speed
         if dist_to_cover > max(2*target_velocity, dist_buffer) and ret > 0: 
             # Super safe to reach target velocity ASAP!
             flag = "d>2tv"
-            # ret = 8*(target_velocity - ego_velocity)
             Kc = 0.25*68
             Pc = 0.005*17
             setpoint = target_velocity
             input = ego_velocity
             ret = self.pid (input, setpoint, 0.5*Kc, 0.5*Pc, Pc/1000, t_pow=1, episodes = 12)
             
-        ##### Edge cases 
-        # Unlikely to happen given the nature of the aforementioned conditions
+        ### Edge cases 
+        ## Unlikely to happen given the nature of the aforementioned conditions
 
         # Going too fast 
         if ego_velocity >= target_velocity:
             flag = "v>=tv"
             ret = 4*(target_velocity - ego_velocity)
 
-        # Goetting too close
-        if dist_to_cover < 0.02* self.distance_threshold:
+        # Getting too close
+        if dist_to_cover <= 0.05* self.distance_threshold:
             flag = "e_brk"
             ret = -10
 
         print(f"{flag} ,ret, {ret}, egoV, {ego_velocity},/,{target_velocity}, set, {setpoint}, ip, {input}, d2lead, {obs.distance_to_lead}, d2cover, {dist_to_cover}, dbuff, {dist_buffer}")
         
-        #### Finally
-        # Before we return the value, we clip it between [-10, 10]
+        ### Finally
+        ## Before we return the value, we clip it between [-10, 10]
         ret = np.clip(ret, -10.0, 10.0)
+        
         return ret
