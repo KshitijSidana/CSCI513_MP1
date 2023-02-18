@@ -1,0 +1,95 @@
+Bootstrap: docker
+From: carlasim/carla:0.9.12
+
+%labels
+    Author anandbal@usc.edu
+    Version v0.0.1
+
+%help
+    This is a container to run the Mini-Project 1a: Adaptive Cruise Control in CARLA for
+    CSCI513.
+
+%setup
+  curl -C - \
+    -SLO https://carla-releases.s3.eu-west-3.amazonaws.com/Linux/AdditionalMaps_0.9.12.tar.gz
+  curl -C - \
+    -SLO https://us.download.nvidia.com/tesla/460.32.03/nvidia-driver-local-repo-ubuntu1804-460.32.03_1.0-1_amd64.deb
+
+%files
+  AdditionalMaps_0.9.12.tar.gz /scif/data/additionalmaps.tar.gz
+  CarlaUE4.sh /scif/data/CarlaUE4.sh
+  nvidia_icd.json /scif/data/nvidia_icd.json
+  nvidia-driver-local-repo-ubuntu1804-460.32.03_1.0-1_amd64.deb /scif/data/drivers.deb
+
+%post
+  dpkg -i /scif/data/drivers.deb
+
+  apt-get update && \
+  DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
+    curl xdg-user-dirs libomp5 vulkan-utils mesa-utils \
+    libnvidia-gl-460=460.32.03-0ubuntu1 \
+    libsdl2-2.0 xserver-xorg libvulkan1
+
+  VULKAN_API_VERSION=`dpkg -s libvulkan1 | grep -oP 'Version: [0-9|\.]+' | grep -oP '[0-9|\.]+'`
+  mkdir -p ${SINGULARITY_ROOTFS}/etc/vulkan/icd.d/
+  echo "{\"file_format_version\" : \"1.0.0\",\"ICD\": {\"library_path\": \"libGLX_nvidia.so.0\",\"api_version\" : \"${VULKAN_API_VERSION}\"}}" > ${SINGULARITY_ROOTFS}/etc/vulkan/icd.d/nvidia_icd.json
+
+  cp /scif/data/nvidia_icd.json /etc/vulkan/icd.d/
+  cp /scif/data/nvidia_icd.json /usr/share/vulkan/icd.d/
+  apt-get clean
+
+#  sh /scif/data/drivers.run --extract-only
+#  cp -r ./NVIDIA-Linux-x86_64-${NVIDIA_DRIVER}/* ${SINGULARITY_ROOTFS}/usr/lib/x86_64-linux-gnu/
+
+%environment
+  unset SDL_VIDEODRIVER
+
+###################
+# CARLA Simulator #
+###################
+
+%appinstall carla_sim
+  cd /home/carla
+  tar --keep-newer-files --totals -xf /scif/data/additionalmaps.tar.gz
+
+  # Remove chmod from the launch script
+  cp /scif/data/CarlaUE4.sh ./CarlaUE4.sh
+
+%startscript
+    cd /home/carla
+    # Use nohup and /dev/null to completely detach server process from terminal
+    nohup ./CarlaUE4.sh -vulkan -RenderOffScreen -nosound
+
+
+####################
+# Python simulator #
+####################
+
+%appinstall mp1a
+  curl -sSL https://micromamba.snakepit.net/api/micromamba/linux-64/latest \
+    | tar -xvj bin/micromamba
+
+  export MAMBA_ROOT_PREFIX=/scif/data/micromamba
+  export MAMBA_EXE=$(pwd)/bin/micromamba
+
+  ./bin/micromamba shell init -q -s bash -p $MAMBA_ROOT_PREFIX
+
+  echo "export MAMBA_ROOT_PREFIX=${MAMBA_ROOT_PREFIX}" >> $SINGULARITY_ENVIRONMENT
+  echo "export MAMBA_EXE=${MAMBA_EXE}" >> $SINGULARITY_ENVIRONMENT
+  echo "export PATH=\"${MAMBA_ROOT_PREFIX}/bin:$PATH\"" >> $SINGULARITY_ENVIRONMENT
+
+  . $MAMBA_ROOT_PREFIX/etc/profile.d/mamba.sh
+
+  micromamba activate
+  micromamba install -q -y python=3.8 -c conda-forge
+  python3 -m pip install -U pip
+  python3 -m pip install -U \
+    numpy \
+    pygame \
+    scipy \
+    scikit-image \
+    matplotlib \
+    "rtamt @ https://github.com/nickovic/rtamt/tarball/ba2bc2d8a48d5c6bbd836904b7e421fb26d7e384" \
+    "carla==0.9.12"
+
+
